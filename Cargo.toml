@@ -1,0 +1,24 @@
+[package]
+name = "rustmapv3"
+version = "0.1.0"
+edition = "2021"
+authors = ["RustMapV3 Contributors"]
+description = "Ultra-fast TCP port discovery engine with Nmap orchestration"
+keywords = ["network", "security", "port-scanner", "nmap", "cli"]
+categories = ["command-line-utilities", "network-programming"]
+license = "MIT"
+repository = "https://github.com/Wael-Rd/RustMapV3"
+readme = "README.md"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+ipnetwork = "0.20"
+trust-dns-resolver = "0.23"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
