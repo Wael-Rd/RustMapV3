@@ -18,7 +18,19 @@ ipnetwork = "0.20"
 trust-dns-resolver = "0.23"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 futures = "0.3"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
+
+[[bin]]
+name = "RustMapV3"
+path = "src/bin/RustMapV3.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+panic = "abort"
