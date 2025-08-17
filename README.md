@@ -51,7 +51,7 @@ curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | 
 ```
 
 ### Prerequisites
-- **Rust** (Edition 2026+): Install from [rustup.rs](https://rustup.rs/)
+- **Rust** (Edition 2021+): Install from [rustup.rs](https://rustup.rs/)
 - **Nmap** (Optional but recommended): Install from [nmap.org](https://nmap.org/)
 - **RustScan** (Optional): Install from [rustscan.github.io](https://rustscan.github.io/RustScan/)
 
