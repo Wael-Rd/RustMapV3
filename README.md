@@ -46,7 +46,7 @@ RustMapV3 combines the lightning-fast performance of Rust-based port scanning wi
 
 ### Quick Install (One-Line)
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | bash && export PATH="$HOME/.cargo/bin:$PATH"
+curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh 
 ```
 
 ### Prerequisites
@@ -54,13 +54,6 @@ curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | 
 - **Nmap** (Optional but recommended): Install from [nmap.org](https://nmap.org/)
 - **RustScan** (Optional): Install from [rustscan.github.io](https://rustscan.github.io/RustScan/)
 
-### From Source
-```bash
-git clone https://github.com/Wael-Rd/RustMapV3.git
-cd RustMapV3
-cargo build --release
-./target/release/RustMapV3 --help
-```
 
 ### Manual Installation
 ```bash
