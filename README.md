@@ -1,4 +1,5 @@
-# RustMapV3
+  # RustMapV3
+![0100101010](https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/0100101010.png)
 
 **Ultra-fast TCP port discovery engine with Nmap orchestration**
 
@@ -46,7 +47,7 @@ RustMapV3 combines the lightning-fast performance of Rust-based port scanning wi
 
 ### Quick Install (One-Line)
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh 
+curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | bash && echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ```
 
 ### Prerequisites
