@@ -1,12 +1,11 @@
 use anyhow::Result;
-use rustmapv3::cli::{Cli, OutputFormat};
+use rustmapv3::cli::{Cli, NmapMode, OutputFormat};
 use rustmapv3::nmap::{NmapConfig, NmapOrchestrator};
 use rustmapv3::rustscan::FallbackScanner;
-use rustmapv3::scanner::ScanConfig;
+use rustmapv3::scanner::{ScanConfig, Scanner};
 use rustmapv3::{ports, targets};
 use std::time::Duration;
 use tracing::{error, info, warn};
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -38,6 +37,9 @@ async fn main() -> Result<()> {
         display_banner();
     }
 
+    // Get effective configuration
+    let effective = cli.effective();
+
     // Parse targets
     info!("Parsing targets: {}", cli.targets);
     let targets = match targets::parse_targets(&cli.targets).await {
@@ -54,9 +56,13 @@ async fn main() -> Result<()> {
     let ports = if let Some(top_count) = cli.top_ports {
         info!("Using top {} common ports", top_count);
         ports::get_top_ports(top_count)
+    } else if effective.ports.starts_with("top") {
+        let count: usize = effective.ports[3..].parse().unwrap_or(1000);
+        info!("Using top {} common ports from preset", count);
+        ports::get_top_ports(count)
     } else {
-        info!("Parsing port specification: {}", cli.ports);
-        match ports::parse_ports(&cli.ports) {
+        info!("Parsing port specification: {}", effective.ports);
+        match ports::parse_ports(&effective.ports) {
             Ok(ports) => ports,
             Err(e) => {
                 error!("Failed to parse ports: {}", e);
@@ -69,10 +75,12 @@ async fn main() -> Result<()> {
 
     // Create scan configuration
     let scan_config = ScanConfig {
-        concurrency: cli.concurrency,
-        timeout: Duration::from_millis(cli.timeout),
-        rate_limit: cli.rate_limit,
-        batch_size: cli.batch_size,
+        concurrency: effective.concurrency,
+        targets_concurrency: effective.targets_concurrency,
+        timeout: Duration::from_millis(effective.timeout_ms),
+        rate_limit: effective.rate_limit,
+        batch_size: effective.batch_size,
+        confirm_open: effective.confirm_open,
     };
 
     // Perform port scanning
@@ -82,7 +90,7 @@ async fn main() -> Result<()> {
         fallback_scanner.scan_targets(&targets, &ports).await
     } else {
         info!("Using internal high-performance scanner");
-        let scanner = rustmapv3::scanner::Scanner::new(scan_config);
+        let scanner = Scanner::new(scan_config);
         scanner.scan_targets(&targets, &ports).await
     };
 
@@ -105,6 +113,7 @@ async fn main() -> Result<()> {
             nmap_args: cli.nmap_args.clone(),
             nse_scripts: cli.nse_scripts.clone(),
             output_dir: cli.output_dir.clone(),
+            smart_mode: matches!(cli.nmap_mode, NmapMode::Smart),
         };
 
         let nmap_orchestrator = NmapOrchestrator::new(nmap_config);
@@ -137,7 +146,7 @@ fn display_banner() {
 /_/ |_|\__,_/____/\__/_/ /_(_)____/_/   /____/  
                                       
 Ultra-fast TCP port discovery engine with Nmap orchestration
-Version 0.1.0 | https://github.com/Wael-Rd/RustMapV3
+Version 0.2.0 | https://github.com/Wael-Rd/RustMapV3
 "#);
 }
 
@@ -212,12 +221,42 @@ fn display_scan_results_json(results: &[rustmapv3::scanner::ScanResults]) {
     println!("{}", serde_json::to_string_pretty(&output).unwrap());
 }
 
-/// Display scan results in YAML format (simplified version)
+/// Display scan results in YAML format
 fn display_scan_results_yaml(results: &[rustmapv3::scanner::ScanResults]) {
-    // For now, convert to JSON and display as YAML-like format
-    // In a full implementation, we'd use a proper YAML library
-    display_scan_results_json(results);
-    warn!("YAML output format not fully implemented, showing JSON instead");
+    let json_results: Vec<serde_json::Value> = results
+        .iter()
+        .map(|result| {
+            serde_json::json!({
+                "target": {
+                    "ip": result.target.ip.to_string(),
+                    "hostname": result.target.hostname,
+                    "display_name": result.target.display_name()
+                },
+                "scan_duration_seconds": result.scan_duration.as_secs_f64(),
+                "total_ports_scanned": result.total_ports_scanned,
+                "open_ports": result.open_ports,
+                "open_port_count": result.open_port_count(),
+                "has_open_ports": result.has_open_ports()
+            })
+        })
+        .collect();
+
+    let data = serde_json::json!({
+        "scan_results": json_results,
+        "summary": {
+            "targets_scanned": results.len(),
+            "targets_with_open_ports": results.iter().filter(|r| r.has_open_ports()).count(),
+            "total_open_ports": results.iter().map(|r| r.open_port_count()).sum::<usize>()
+        }
+    });
+
+    match serde_yaml::to_string(&data) {
+        Ok(yaml) => println!("{}", yaml),
+        Err(_) => {
+            warn!("Failed to serialize to YAML, falling back to JSON");
+            println!("{}", serde_json::to_string_pretty(&data).unwrap());
+        }
+    }
 }
 
 /// Display Nmap results
@@ -255,24 +294,4 @@ fn display_nmap_results(results: &[rustmapv3::nmap::NmapResult], format: &Output
              results.first()
                  .map(|r| r.output_files.normal_output.parent().unwrap().display().to_string())
                  .unwrap_or_else(|| "scans/".to_string()));
-}
-
-/// Legal and ethics disclaimer
-#[allow(dead_code)]
-fn display_disclaimer() {
-    println!(r#"
-⚠️  LEGAL AND ETHICAL DISCLAIMER ⚠️
-
-RustMapV3 is a network security tool intended for legitimate security testing,
-network administration, and educational purposes only.
-
-IMPORTANT:
-• Only scan networks and systems you own or have explicit permission to test
-• Unauthorized scanning of networks may violate local, state, or federal laws
-• The developers assume no liability for any misuse of this tool
-• Users are solely responsible for compliance with all applicable laws and regulations
-
-By using this tool, you acknowledge that you have read and understood this disclaimer
-and agree to use RustMapV3 responsibly and legally.
-"#);
 }

@@ -1,208 +1,153 @@
 //! CLI argument parsing for RustMapV3
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
-    name = "rustmapv3",
-    version = "0.1.0",
-    about = "Ultra-fast TCP port discovery engine with Nmap orchestration",
-    long_about = "RustMapV3 combines a lightning-fast Rust-based port scanner with Nmap's \
-                  comprehensive feature set. It quickly discovers open TCP ports and then \
-                  orchestrates Nmap for detailed service detection and vulnerability scanning."
+    name = "RustMapV3",
+    version = "0.2.0",
+    about = "Ultra-fast TCP port discovery with smart Nmap orchestration",
+    long_about = "RustMapV3 discovers open TCP ports at high speed and orchestrates Nmap with targeted scripts for maximum signal per second."
 )]
 pub struct Cli {
-    /// Target(s) to scan: IP, hostname, comma-separated list, or CIDR notation
-    #[arg(
-        value_name = "TARGETS",
-        help = "Target(s): IP (192.168.1.1), hostname (example.com), list (192.168.1.1,example.com), or CIDR (192.168.1.0/24)"
-    )]
+    /// Target(s): IP (192.168.1.1), hostname (example.com), list (a,b), or CIDR (192.168.1.0/24)
+    #[arg(value_name = "TARGETS")]
     pub targets: String,
 
-    /// Port specification: ranges and lists (e.g., "1-1024,3306,8080-8090")
-    #[arg(
-        short = 'p',
-        long = "ports",
-        value_name = "PORTS",
-        help = "Port ranges/lists: 1-1024,3306,8080-8090",
-        default_value = "1-65535"
-    )]
+    /// Preset for speed vs. depth. Overrides individual flags unless explicitly set.
+    #[arg(long = "preset", value_enum, default_value = "full")]
+    pub preset: Preset,
+
+    /// Ports to scan [default: 1-65535]
+    #[arg(short = 'p', long = "ports", default_value = "1-65535")]
     pub ports: String,
 
     /// Scan top N common ports (overrides --ports)
-    #[arg(
-        short = 't',
-        long = "top",
-        value_name = "N",
-        help = "Scan top N common ports (100, 1000, 5000)",
-        conflicts_with = "ports"
-    )]
+    #[arg(short = 't', long = "top", value_name = "N", conflicts_with = "ports")]
     pub top_ports: Option<usize>,
 
-    /// Number of concurrent connections
-    #[arg(
-        short = 'c',
-        long = "concurrency",
-        value_name = "N",
-        help = "Concurrent connection limit",
-        default_value = "4096"
-    )]
-    pub concurrency: usize,
+    /// Per-target concurrency (connections in flight per host)
+    #[arg(long = "concurrency", value_name = "N")]
+    pub concurrency: Option<usize>,
 
-    /// Per-connection timeout in milliseconds
-    #[arg(
-        long = "timeout",
-        value_name = "MS",
-        help = "Connection timeout in milliseconds",
-        default_value = "300"
-    )]
-    pub timeout: u64,
+    /// Concurrent targets scanned in parallel
+    #[arg(long = "targets-concurrency", value_name = "N")]
+    pub targets_concurrency: Option<usize>,
 
-    /// Maximum connection attempts per second
-    #[arg(
-        short = 'r',
-        long = "rate",
-        value_name = "N",
-        help = "Max connection attempts per second"
-    )]
+    /// Timeout in milliseconds per connection attempt
+    #[arg(long = "timeout", value_name = "MS")]
+    pub timeout: Option<u64>,
+
+    /// Global connection attempts per second
+    #[arg(short = 'r', long = "rate", value_name = "N")]
     pub rate_limit: Option<u64>,
 
-    /// Internal batching size for reduced overhead
-    #[arg(
-        long = "batch-size",
-        value_name = "N",
-        help = "Internal batch size for processing",
-        default_value = "1024"
-    )]
-    pub batch_size: usize,
+    /// Internal batch size (ports per chunk)
+    #[arg(long = "batch-size", value_name = "N")]
+    pub batch_size: Option<usize>,
 
-    /// Use RustScan for port discovery (if available)
-    #[arg(
-        long = "use-rustscan",
-        help = "Use RustScan binary for port discovery (fallback to internal scanner)"
-    )]
+    /// Confirm open ports with a quick second pass (reduces false positives)
+    #[arg(long = "confirm-open")]
+    pub confirm_open: bool,
+
+    /// Use RustScan for discovery (fallback to internal scanner)
+    #[arg(long = "use-rustscan")]
     pub use_rustscan: bool,
 
-    /// Additional arguments to pass to RustScan
-    #[arg(
-        long = "rustscan-args",
-        value_name = "ARGS",
-        help = "Additional arguments for RustScan",
-        requires = "use_rustscan"
-    )]
+    /// Additional arguments for RustScan
+    #[arg(long = "rustscan-args", requires = "use_rustscan")]
     pub rustscan_args: Option<String>,
 
-    /// Additional arguments to pass to Nmap
-    #[arg(
-        long = "nmap-args",
-        value_name = "ARGS",
-        help = "Additional arguments for Nmap (default: -Pn -sV -sC)"
-    )]
+    /// Additional arguments for Nmap (shorthand normalized, e.g., sCV -> -sC -sV)
+    #[arg(long = "nmap-args")]
     pub nmap_args: Option<String>,
 
-    /// NSE script categories or specific scripts
-    #[arg(
-        long = "nse",
-        value_name = "SCRIPTS",
-        help = "NSE scripts: default,vuln,auth or specific script names"
-    )]
+    /// NSE scripts: default,vuln,auth or specific scripts
+    #[arg(long = "nse")]
     pub nse_scripts: Option<String>,
 
-    /// Output directory for scan results
-    #[arg(
-        short = 'o',
-        long = "output",
-        value_name = "DIR",
-        help = "Output directory for scan results",
-        default_value = "scans"
-    )]
+    /// Nmap mode: smart targets scripts for discovered ports vs plain default scripts
+    #[arg(long = "nmap-mode", value_enum, default_value = "smart")]
+    pub nmap_mode: NmapMode,
+
+    /// Output directory for Nmap results
+    #[arg(short = 'o', long = "output", default_value = "scans")]
     pub output_dir: PathBuf,
 
-    /// Disable Nmap deep scanning (port discovery only)
-    #[arg(
-        long = "no-nmap",
-        help = "Skip Nmap deep scanning, only perform port discovery"
-    )]
+    /// Skip Nmap deep scanning
+    #[arg(long = "no-nmap")]
     pub no_nmap: bool,
 
+    /// Output format: json, yaml, table
+    #[arg(long = "format", value_enum, default_value = "table")]
+    pub output_format: OutputFormat,
+
     /// Verbose output
-    #[arg(short = 'v', long = "verbose", help = "Enable verbose output")]
+    #[arg(short = 'v', long = "verbose")]
     pub verbose: bool,
 
-    /// Quiet mode (minimal output)
-    #[arg(short = 'q', long = "quiet", help = "Quiet mode", conflicts_with = "verbose")]
+    /// Quiet mode
+    #[arg(short = 'q', long = "quiet", conflicts_with = "verbose")]
     pub quiet: bool,
-
-    /// Output format for results
-    #[arg(
-        long = "format",
-        value_name = "FORMAT",
-        help = "Output format: json, yaml, table",
-        default_value = "table"
-    )]
-    pub output_format: OutputFormat,
 }
 
-#[derive(Clone, Debug, clap::ValueEnum)]
-pub enum OutputFormat {
-    Json,
-    Yaml,
-    Table,
+#[derive(Clone, Debug, ValueEnum)]
+pub enum OutputFormat { Json, Yaml, Table }
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum Preset { Fast, Full, Thorough }
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum NmapMode { Smart, Plain }
+
+pub struct Effective {
+    pub ports: String,
+    pub concurrency: usize,
+    pub targets_concurrency: usize,
+    pub timeout_ms: u64,
+    pub rate_limit: Option<u64>,
+    pub batch_size: usize,
+    pub confirm_open: bool,
 }
 
 impl Cli {
-    /// Parse command line arguments
-    pub fn parse_args() -> Self {
-        Self::parse()
-    }
+    pub fn parse_args() -> Self { Self::parse() }
 
-    /// Get the effective Nmap arguments
-    pub fn get_nmap_args(&self) -> String {
-        let mut args = vec!["-Pn".to_string(), "-sV".to_string(), "-sC".to_string()];
-        
-        if let Some(ref nse) = self.nse_scripts {
-            args.push(format!("--script={}", nse));
-        }
-        
-        if let Some(ref extra_args) = self.nmap_args {
-            args.extend(extra_args.split_whitespace().map(String::from));
-        }
-        
-        args.join(" ")
-    }
-
-    /// Validate CLI arguments
     pub fn validate(&self) -> crate::Result<()> {
-        // Validate concurrency
-        if self.concurrency == 0 {
-            return Err(crate::Error::General("Concurrency must be greater than 0".to_string()));
-        }
-
-        // Validate timeout
-        if self.timeout == 0 {
-            return Err(crate::Error::General("Timeout must be greater than 0".to_string()));
-        }
-
-        // Validate batch size
-        if self.batch_size == 0 {
-            return Err(crate::Error::General("Batch size must be greater than 0".to_string()));
-        }
-
-        // Validate rate limit
-        if let Some(rate) = self.rate_limit {
-            if rate == 0 {
-                return Err(crate::Error::General("Rate limit must be greater than 0".to_string()));
-            }
-        }
-
-        // Validate top ports
         if let Some(top) = self.top_ports {
             if top == 0 || top > 65535 {
-                return Err(crate::Error::General("Top ports must be between 1 and 65535".to_string()));
+                return Err(crate::Error::General("Top ports must be between 1 and 65535".into()));
             }
         }
-
         Ok(())
+    }
+
+    pub fn effective(&self) -> Effective {
+        let (mut ports, mut concurrency, mut targets_concurrency, mut timeout_ms, mut rate, mut batch, confirm) = match self.preset {
+            Preset::Fast => (
+                self.top_ports.map(|n| n.to_string()).unwrap_or_else(|| "top1000".to_string()),
+                8192, 32, 200, Some(20000), 1500, self.confirm_open,
+            ),
+            Preset::Full => (
+                "1-65535".to_string(),
+                8192, 32, 250, Some(15000), 2000, self.confirm_open,
+            ),
+            Preset::Thorough => (
+                "1-65535".to_string(),
+                4096, 16, 600, Some(6000), 1500, true,
+            ),
+        };
+
+        if let Some(user_ports) = self.top_ports.map(|n| format!("top{}", n)).or_else(|| if !self.ports.trim().is_empty() { Some(self.ports.clone()) } else { None }) {
+            ports = user_ports;
+        }
+        if let Some(c) = self.concurrency { concurrency = c; }
+        if let Some(tc) = self.targets_concurrency { targets_concurrency = tc; }
+        if let Some(t) = self.timeout { timeout_ms = t; }
+        if let Some(r) = self.rate_limit { rate = Some(r); }
+        if let Some(b) = self.batch_size { batch = b; }
+
+        Effective { ports, concurrency, targets_concurrency, timeout_ms, rate_limit: rate, batch_size: batch, confirm_open: confirm }
     }
 }
