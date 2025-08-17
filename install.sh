@@ -52,26 +52,18 @@ cargo build --release
 info "Installing RustMapV3..."
 cargo install --path .
 
-# Ensure ~/.cargo/bin is in PATH
+# Ensure ~/.cargo/bin is in PATH (permanent)
 CARGO_BIN="$HOME/.cargo/bin"
 if [[ ":$PATH:" != *":$CARGO_BIN:"* ]]; then
-    warn "~/.cargo/bin is not in PATH. Adding to shell profile..."
-    
-    # Detect shell and add to appropriate profile
-    if [[ "$SHELL" == *"zsh"* ]]; then
-        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc
-        info "Added to ~/.zshrc"
-    elif [[ "$SHELL" == *"bash"* ]]; then
-        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
-        info "Added to ~/.bashrc"
-    else
+    warn "~/.cargo/bin is not in PATH. Adding to ~/.profile..."
+    if ! grep -q 'export PATH="$HOME/.cargo/bin:$PATH"' ~/.profile; then
         echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.profile
         info "Added to ~/.profile"
     fi
-    
-    # Export for current session
-    export PATH="$CARGO_BIN:$PATH"
 fi
+
+# Reload profile so RustMapV3 is available immediately
+source ~/.profile
 
 # Clean up
 cd /
@@ -88,5 +80,5 @@ if command -v RustMapV3 &> /dev/null; then
     echo "  RustMapV3 127.0.0.1 --preset fast --top 10 --no-nmap"
 else
     warn "RustMapV3 installed but not found in PATH"
-    echo "Please restart your shell or run: source ~/.bashrc (or ~/.zshrc)"
+    echo "Please restart your shell or run: source ~/.profile"
 fi
