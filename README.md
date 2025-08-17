@@ -44,6 +44,11 @@ RustMapV3 combines the lightning-fast performance of Rust-based port scanning wi
 
 ## 📦 Installation
 
+### Quick Install (One-Line)
+```bash
+curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | bash && export PATH="$HOME/.cargo/bin:$PATH"
+```
+
 ### Prerequisites
 - **Rust** (Edition 2021+): Install from [rustup.rs](https://rustup.rs/)
 - **Nmap** (Optional but recommended): Install from [nmap.org](https://nmap.org/)
@@ -54,13 +59,19 @@ RustMapV3 combines the lightning-fast performance of Rust-based port scanning wi
 git clone https://github.com/Wael-Rd/RustMapV3.git
 cd RustMapV3
 cargo build --release
-./target/release/rustmapv3 --help
+./target/release/RustMapV3 --help
 ```
 
-### Installation
+### Manual Installation
 ```bash
 cargo install --path .
-rustmapv3 --help
+RustMapV3 --help
+```
+
+### Verify Installation
+```bash
+# Test with localhost
+RustMapV3 127.0.0.1 --preset fast --top 10 --no-nmap
 ```
 
 ## 🛠️ Usage
@@ -69,77 +80,94 @@ rustmapv3 --help
 
 #### Single Target Scan
 ```bash
-# Scan a single IP with top 1000 ports
-rustmapv3 192.168.1.1 --top 1000
+# Quick scan with fast preset
+RustMapV3 192.168.1.1 --preset fast
+
+# Full port range with thorough preset  
+RustMapV3 192.168.1.1 --preset thorough
 
 # Scan specific ports
-rustmapv3 192.168.1.1 --ports "22,80,443,3306,8080-8090"
+RustMapV3 192.168.1.1 --ports "22,80,443,3306,8080-8090"
 
-# Scan hostname
-rustmapv3 example.com --top 100
+# Scan hostname with top 100 ports
+RustMapV3 example.com --top 100
 ```
 
 #### Multiple Targets
 ```bash
 # Multiple IPs
-rustmapv3 "192.168.1.1,192.168.1.10,example.com"
+RustMapV3 "192.168.1.1,192.168.1.10,example.com"
 
-# CIDR notation
-rustmapv3 192.168.1.0/24 --top 1000
+# CIDR notation with full preset
+RustMapV3 192.168.1.0/24 --preset full
 
-# Mixed targets
-rustmapv3 "192.168.1.1,example.com,10.0.0.0/28" --ports "1-1024"
+# Mixed targets with custom options
+RustMapV3 "192.168.1.1,example.com,10.0.0.0/28" --ports "1-1024" --confirm-open
 ```
 
 #### Performance Tuning
 ```bash
-# High concurrency scan
-rustmapv3 192.168.1.0/24 --concurrency 8192 --timeout 200
+# High concurrency scan with custom settings
+RustMapV3 192.168.1.0/24 --concurrency 8192 --targets-concurrency 64 --timeout 200
 
-# Rate limited scan
-rustmapv3 192.168.1.0/24 --rate 1000 --batch-size 512
+# Rate limited scan for stealth
+RustMapV3 192.168.1.0/24 --rate 1000 --batch-size 512
 
-# Use RustScan for discovery
-rustmapv3 192.168.1.1 --use-rustscan --rustscan-args "--ulimit 10000"
+# Use RustScan for discovery (fallback to internal)
+RustMapV3 192.168.1.1 --use-rustscan --rustscan-args "--ulimit 10000"
 ```
 
 #### Nmap Integration
 ```bash
-# Custom Nmap arguments
-rustmapv3 192.168.1.1 --nmap-args "-O --traceroute"
+# Smart Nmap with targeted scripts
+RustMapV3 192.168.1.1 --nmap-mode smart
 
-# Specific NSE scripts
-rustmapv3 192.168.1.1 --nse "vuln,auth,default"
+# Custom Nmap arguments with normalization
+RustMapV3 192.168.1.1 --nmap-args "sCV T4 script=vuln"
+
+# Specific NSE scripts  
+RustMapV3 192.168.1.1 --nse "vuln,auth,default"
 
 # Skip Nmap deep scanning
-rustmapv3 192.168.1.1 --no-nmap
+RustMapV3 192.168.1.1 --no-nmap
 
-# Custom output directory
-rustmapv3 192.168.1.1 --output /tmp/scan_results
+# Custom output directory with timestamped files
+RustMapV3 192.168.1.1 --output /tmp/scan_results
 ```
 
-#### Output Formats
+#### Presets and Output Formats
 ```bash
+# Fast preset: top 1000 ports, high concurrency, no confirm
+RustMapV3 192.168.1.1 --preset fast
+
+# Full preset (default): all ports, balanced settings
+RustMapV3 192.168.1.1 --preset full  
+
+# Thorough preset: all ports, confirm pass, lower concurrency
+RustMapV3 192.168.1.1 --preset thorough
+
 # JSON output
-rustmapv3 192.168.1.1 --format json
+RustMapV3 192.168.1.1 --format json
+
+# YAML output  
+RustMapV3 192.168.1.1 --format yaml
 
 # Quiet mode
-rustmapv3 192.168.1.1 --quiet
+RustMapV3 192.168.1.1 --quiet
 
 # Verbose logging
-rustmapv3 192.168.1.1 --verbose
+RustMapV3 192.168.1.1 --verbose
 ```
 
 ### Advanced Usage
 
 #### Large Network Scan
 ```bash
-rustmapv3 "10.0.0.0/20" \
-  --top 1000 \
-  --concurrency 4096 \
-  --rate 2000 \
-  --timeout 500 \
-  --use-rustscan \
+RustMapV3 "10.0.0.0/20" \
+  --preset full \
+  --targets-concurrency 64 \
+  --rate 15000 \
+  --confirm-open \
   --nse "default,vuln" \
   --output ./enterprise_scan \
   --format json
@@ -147,12 +175,13 @@ rustmapv3 "10.0.0.0/20" \
 
 #### Stealth Scan
 ```bash
-rustmapv3 target.com \
+RustMapV3 target.com \
   --ports "22,80,443" \
   --concurrency 10 \
   --rate 5 \
   --timeout 2000 \
-  --nmap-args "-T1 -f"
+  --nmap-args "T1 A" \
+  --nmap-mode plain
 ```
 
 ## 📊 Output
