@@ -1,4 +1,4 @@
-# RustMapV3 🗺️
+# RustMapV3 �️
 ![011001010101010](https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/011001010101010.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
