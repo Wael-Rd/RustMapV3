@@ -1,54 +1,80 @@
-  # RustMapV3
+# RustMapV3 🗺️
 ![011001010101010](https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/011001010101010.png)
 
-**Ultra-fast TCP port discovery engine with Nmap orchestration**
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+[![Rust Version](https://img.shields.io/badge/rust-1.70.0%2B-blue.svg)](https://www.rust-lang.org/) 
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Wael-Rd/RustMapV3/rust.yml?branch=main)](https://github.com/Wael-Rd/RustMapV3/actions)
 
-RustMapV3 combines the lightning-fast performance of Rust-based port scanning with the comprehensive feature set of Nmap. It quickly discovers open TCP ports and then orchestrates Nmap for detailed service detection, vulnerability scanning, and deep network analysis.
+**🔥 The Blazing-Fast, Nmap-Powered TCP Port Scanner 🔥**
+
+RustMapV3 is not just another port scanner. It's a high-performance discovery engine, meticulously engineered in Rust to find open TCP ports with extreme speed, and then intelligently orchestrates the legendary **Nmap** for deep, comprehensive analysis.
+
+It's the perfect fusion of **Rust's speed** and **Nmap's power**.
+
+---
+
+## 📜 Table of Contents
+- [🚀 Features](#-features)
+- [📦 Installation](#-installation)
+- [🛠️ Usage](#-usage)
+- [📊 Output](#-output)
+- [⚙️ Configuration](#️-configuration)
+- [🔧 Development](#-development)
+- [🛡️ Security Considerations](#️-security-considerations)
+- [⚠️ Legal and Ethical Disclaimer](#️-legal-and-ethical-disclaimer)
+- [📄 License](#-license)
+- [🤝 Contributing](#-contributing)
+- [📞 Support](#-support)
+- [🙏 Acknowledgments](#-acknowledgments)
+
+---
 
 ## 🚀 Features
 
 ### High-Performance Port Discovery
-- **Blazing Fast**: Rust-powered TCP port scanner with configurable concurrency (up to 4096+ concurrent connections)
-- **Smart Rate Limiting**: Optional connection rate limiting with token bucket algorithm
-- **Efficient Memory Usage**: Batch processing to handle large port ranges and target lists
-- **Timeout Control**: Configurable per-connection timeouts (default: 300ms)
+- **Blazing Fast**: Asynchronous Rust-powered TCP scanner that screams through port ranges.
+- **Configurable Concurrency**: Fine-tune performance with up to 4096+ concurrent connections.
+- **Smart Rate Limiting**: Optional token bucket algorithm to keep your scanning polite and effective.
+- **Memory Efficient**: Batch processing handles massive target lists and port ranges without breaking a sweat.
+- **Timeout Control**: Configurable per-connection timeouts (default: 300ms).
 
 ### Flexible Target Specification
-- **Multiple Formats**: Single IPs, hostnames, CIDR notation, comma-separated lists
-- **IPv4 & IPv6**: Full support for both IP versions
-- **DNS Resolution**: Automatic hostname resolution with caching
-- **CIDR Expansion**: Intelligent expansion of network ranges (with safety limits)
+- **Multiple Formats**: IPs, hostnames, CIDR notation, or comma-separated lists.
+- **IPv4 & IPv6**: Full support for both IP versions.
+- **DNS Resolution**: Automatic and cached hostname resolution.
+- **CIDR Expansion**: Intelligent and safe expansion of network ranges.
 
 ### Port Selection Options
-- **Custom Ranges**: Flexible port specification (e.g., `1-1024,3306,8080-8090`)
-- **Top Ports**: Predefined lists of most common ports (top 100, 1000, 5000)
-- **Full Range**: Complete 1-65535 port scanning capability
+- **Custom Ranges**: Define specific ports or ranges (`1-1024,3306,8080-8090`).
+- **Top Ports**: Predefined lists of the most common ports (`top100`, `top1000`, `top5000`).
+- **Full Range**: Scan all 65,535 ports.
 
 ### Nmap Orchestration
-- **Deep Scanning**: Automatic Nmap execution on discovered open ports
-- **Service Detection**: Version detection (`-sV`) and default scripts (`-sC`)
-- **Smart Scripts**: Automatic NSE script selection based on open-port probes
-- **Multiple Outputs**: Normal, XML, and grepable output formats
-- **Organized Results**: Timestamped output files in structured directories
+- **Deep Scanning**: Automatically run Nmap on discovered open ports.
+- **Service & Version Detection**: Default scripts (`-sC`) and version detection (`-sV`).
+- **Smart Scripts**: Automatic NSE script selection based on open-port probes.
+- **Multiple Outputs**: Normal, XML, and grepable formats.
+- **Organized Results**: Timestamped output files in structured directories.
 
-### User Experience
-- **Rich CLI**: Comprehensive command-line interface with clap v4
-- **Multiple Output Formats**: Table, JSON, and YAML output options
-- **Progress Feedback**: Real-time scanning progress and statistics
-- **Verbose Logging**: Configurable logging levels with tracing
-- **Error Handling**: Graceful error handling and recovery
+### ✨ Awesome User Experience
+- **Rich CLI**: A comprehensive and intuitive command-line interface built with `clap` v4.
+- **Multiple Output Formats**: Choose from `table`, `json`, or `yaml`.
+- **Real-Time Feedback**: Live progress updates and scanning statistics.
+- **Verbose Logging**: Configurable logging levels with `tracing`.
+- **Graceful Error Handling**: Robust error handling and recovery.
+
+---
 
 ## 📦 Installation
 
-### Quick Install (One-Line)
+### Quick & Easy (One-Line)
 ```bash
 curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | bash && echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ```
 
 ### Prerequisites
-- **Rust** (Edition 2021+): Install from [rustup.rs](https://rustup.rs/)
-- **Nmap** (Optional but recommended): Install from [nmap.org](https://nmap.org/)
-
+- **Rust** (Edition 2021+): Get it from [rustup.rs](https://rustup.rs/).
+- **Nmap** (Optional but highly recommended): Get it from [nmap.org](https://nmap.org/).
 
 ### Manual Installation
 ```bash
@@ -62,16 +88,19 @@ RustMapV3 --help
 RustMapV3 127.0.0.1 --profile fast -p top100 --no-nmap
 ```
 
+---
+
 ## 🛠️ Usage
 
-### Basic Examples
+<details>
+<summary><b>Click to expand Basic Examples</b></summary>
 
 #### Single Target Scan
 ```bash
 # Quick scan with fast profile
 RustMapV3 192.168.1.1 --profile fast
 
-# Full port range with stealth profile  
+# Full port range with stealth profile
 RustMapV3 192.168.1.1 --profile stealth
 
 # Scan specific ports
@@ -117,7 +146,7 @@ RustMapV3 192.168.1.1 --output /tmp/scan_results
 RustMapV3 192.168.1.1 --profile fast
 
 # Balanced profile (default): top 1000 ports, balanced settings
-RustMapV3 192.168.1.1 --profile balanced  
+RustMapV3 192.168.1.1 --profile balanced
 
 # Stealth profile: full ports, confirm pass, conservative pacing
 RustMapV3 192.168.1.1 --profile stealth
@@ -125,7 +154,7 @@ RustMapV3 192.168.1.1 --profile stealth
 # JSON output
 RustMapV3 192.168.1.1 --format json
 
-# YAML output  
+# YAML output
 RustMapV3 192.168.1.1 --format yaml
 
 # Quiet mode
@@ -134,8 +163,10 @@ RustMapV3 192.168.1.1 --quiet
 # Verbose logging
 RustMapV3 192.168.1.1 --verbose
 ```
+</details>
 
-### Advanced Usage
+<details>
+<summary><b>Click to expand Advanced Usage</b></summary>
 
 #### Large Network Scan
 ```bash
@@ -152,12 +183,14 @@ RustMapV3 target.com \
   --profile stealth \
   --format json
 ```
+</details>
+
+---
 
 ## 📊 Output
 
 ### Console Output
-RustMapV3 provides rich console output with scan progress, open port discovery, and result summaries:
-
+Rich console output with progress, open ports, and summaries:
 ```
 🎯 Target: example.com (93.184.216.34)
    Scan Duration: 2.34s
@@ -172,7 +205,7 @@ RustMapV3 provides rich console output with scan progress, open port discovery, 
 ```
 
 ### File Output
-Nmap integration creates organized output files:
+Organized Nmap output files:
 ```
 scans/
 ├── 20240816_143022_example.com_93.184.216.34.nmap    # Normal output
@@ -181,7 +214,7 @@ scans/
 ```
 
 ### JSON Output
-Structured JSON output for automation and integration:
+Structured JSON for easy integration and automation:
 ```json
 {
   "scan_results": [
@@ -206,9 +239,13 @@ Structured JSON output for automation and integration:
 }
 ```
 
+---
+
 ## ⚙️ Configuration
 
-### Command Line Options
+<details>
+<summary><b>Click to expand Command Line Options</b></summary>
+
 ```
 USAGE:
   rustmapv3 [OPTIONS] <TARGETS>
@@ -228,13 +265,22 @@ OPTIONS:
   -h, --help                          Print help
   -V, --version                       Print version
 ```
+</details>
 
-### Environment Variables
+<details>
+<summary><b>Click to expand Environment Variables</b></summary>
+
 RustMapV3 respects standard environment variables:
-- `RUST_LOG`: Set logging level (trace, debug, info, warn, error)
-- `NO_COLOR`: Disable colored output
+- `RUST_LOG`: Set logging level (`trace`, `debug`, `info`, `warn`, `error`).
+- `NO_COLOR`: Disable colored output.
+</details>
+
+---
 
 ## 🔧 Development
+
+<details>
+<summary><b>Click to expand Development Details</b></summary>
 
 ### Building from Source
 ```bash
@@ -267,79 +313,59 @@ src/
 ├── ports.rs        # Port range parsing
 └── error.rs        # Error handling
 ```
-
-## 🛡️ Security Considerations
-
-### Performance Impact
-- High concurrency can impact network performance
-- Rate limiting helps prevent network congestion
-- Batch processing reduces memory usage
-
-### Network Behavior
-- TCP SYN scanning (connect scans)
-- Respects target network timeouts
-- Configurable scan timing
-
-### Best Practices
-- Start with lower concurrency for unknown networks
-- Use rate limiting in production environments
-- Monitor network impact during scans
-- Verify target ownership before scanning
-
-## ⚠️ Legal and Ethical Disclaimer
-
-**RustMapV3 is intended for legitimate security testing, network administration, and educational purposes only.**
-
-### Important Guidelines:
-- ✅ **DO**: Only scan networks and systems you own or have explicit written permission to test
-- ✅ **DO**: Use for authorized penetration testing and security assessments
-- ✅ **DO**: Follow responsible disclosure practices for any vulnerabilities found
-- ✅ **DO**: Comply with all applicable local, state, and federal laws
-
-- ❌ **DON'T**: Scan networks without explicit authorization
-- ❌ **DON'T**: Use for malicious purposes or unauthorized access attempts
-- ❌ **DON'T**: Violate terms of service or computer fraud laws
-- ❌ **DON'T**: Scan networks you don't own without permission
-
-### Legal Notice:
-Unauthorized scanning of networks may violate:
-- Computer Fraud and Abuse Act (CFAA) in the United States
-- Computer Misuse Act in the United Kingdom
-- Similar cybersecurity laws in other jurisdictions
-
-**The developers assume no liability for any misuse of this tool. Users are solely responsible for compliance with all applicable laws and regulations.**
-
-By using RustMapV3, you acknowledge that you have read and understood this disclaimer and agree to use the tool responsibly and legally.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### Areas for Contribution:
-- Additional output formats
-- Performance optimizations
-- More comprehensive NSE script integration
-- IPv6 scanning enhancements
-- GUI interface
-- Docker containerization
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/Wael-Rd/RustMapV3/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Wael-Rd/RustMapV3/discussions)
-- **Documentation**: This README and inline code documentation
-
-## 🙏 Acknowledgments
-
-- **RustScan**: Inspiration for high-performance Rust-based scanning
-- **Nmap**: The gold standard for network discovery and security auditing
-- **Rust Community**: For excellent networking and async libraries
-- **Security Community**: For continuous feedback and responsible disclosure practices
+</details>
 
 ---
 
-**RustMapV3** - Combining the speed of Rust with the power of Nmap for comprehensive network discovery.
+## 🛡️ Security Considerations
+
+- **Performance Impact**: High concurrency can impact network performance. Use rate limiting.
+- **Network Behavior**: Uses TCP SYN scans. Respects target network timeouts.
+- **Best Practices**: Start with lower concurrency on unknown networks. Monitor network impact. **Only scan what you own or have permission to test.**
+
+---
+
+## ⚠️ Legal and Ethical Disclaimer
+
+**RustMapV3 is for authorized security testing and educational purposes ONLY.**
+
+- ✅ **DO**: Scan systems you own or have explicit, written permission to test.
+- ❌ **DON'T**: Scan networks without authorization. This is illegal.
+- ❌ **DON'T**: Use this tool for malicious purposes.
+
+Unauthorized scanning is a crime. The developers assume **no liability** for misuse of this tool. You are solely responsible for your actions. **By using RustMapV3, you agree to use it legally and responsibly.**
+
+---
+
+## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🤝 Contributing
+Contributions are welcome! Please submit a Pull Request or open an issue to discuss major changes.
+
+### How you can help:
+- Add more output formats.
+- Optimize performance.
+- Enhance NSE script integration.
+- Improve IPv6 scanning.
+- Build a GUI.
+- Create a Docker container.
+
+---
+
+## 📞 Support
+- **Issues**: [GitHub Issues](https://github.com/Wael-Rd/RustMapV3/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Wael-Rd/RustMapV3/discussions)
+
+---
+
+## 🙏 Acknowledgments
+- **RustScan**: For the inspiration.
+- **Nmap**: For being the gold standard.
+- **The Rust Community**: For amazing libraries and support.
+
+---
+
+**RustMapV3** - Speed of Rust, Power of Nmap.
