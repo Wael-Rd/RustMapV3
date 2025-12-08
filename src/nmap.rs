@@ -26,7 +26,10 @@ impl NmapOrchestrator {
     async fn run_nmap_scan(&self, scan_result: &ScanResults) -> Result<NmapResult> {
         let started = Instant::now(); let target_name = self.generate_target_filename(&scan_result.target); let output_path = self.config.output_dir.clone().join(&target_name);
         let mut cmd = Command::new("nmap"); cmd.arg("-Pn").arg("-sV").arg("-sC").arg("-T4");
-        if self.config.smart_mode && self.config.nse_scripts.is_none() { let smart_scripts = scripts_for_ports(&scan_result.open_ports); if !smart_scripts.is_empty() { cmd.arg("--script").arg(smart_scripts); } }
+        if self.config.smart_mode && self.config.nse_scripts.is_none() {
+            let smart_scripts = scripts_for_ports(&scan_result.open_ports, &scan_result.probes);
+            if !smart_scripts.is_empty() { cmd.arg("--script").arg(smart_scripts); }
+        }
         if let Some(ref scripts) = self.config.nse_scripts { cmd.arg("--script").arg(scripts); }
         if let Some(ref args) = self.config.nmap_args { for a in normalize_nmap_args(args).split_whitespace() { cmd.arg(a); } }
         if !scan_result.open_ports.is_empty() { cmd.arg("-p").arg(format_ports_for_nmap(&scan_result.open_ports)); }
@@ -49,7 +52,37 @@ impl NmapOutputFiles { pub fn all_exist(&self) -> bool { self.normal_output.exis
 
 static PORT_SCRIPT_MAP: Lazy<Vec<(u16, &'static str)>> = Lazy::new(|| vec![ (21, "ftp-*"), (22, "ssh-*"), (23, "telnet-*"), (25, "smtp-commands,smtp-enum-users,smtp-open-relay"), (53, "dns-*"), (80, "http-title,http-server-header,http-headers,http-methods,http-enum"), (110, "pop3-*"), (111, "rpcinfo"), (135, "msrpc-enum,msrpc-enum-shares"), (139, "smb2-security-mode,smb2-time,smb2-capabilities"), (143, "imap-*"), (161, "snmp-info,snmp-netstat,snmp-processes"), (389, "ldap*"), (443, "http-title,http-server-header,ssl-cert,ssl-enum-ciphers"), (445, "smb-enum-shares,smb-enum-users,smb-os-discovery,smb2-security-mode"), (465, "smtp-commands,ssl-enum-ciphers"), (587, "smtp-commands"), (631, "ipp*"), (993, "imap-*"), (995, "pop3-*"), (1352, "notes-ntlm-info"), (1433, "ms-sql-info,ms-sql-ntlm-info,ms-sql-dac"), (1521, "oracle-tns-version,oracle-tns-poison"), (2049, "nfs-ls,nfs-showmount"), (2375, "docker-version"), (27017, "mongodb-info"), (3306, "mysql-info,mysql-enum,mysql-audit"), (3389, "rdp-enum-encryption,rdp-ntlm-info"), (4433, "ssl-cert,ssl-enum-ciphers"), (5432, "pgsql-info,pgsql-brute"), (5601, "http-title,http-server-header"), (5672, "amqp-info"), (5900, "vnc-info"), (5985, "http-title,http-server-header"), (6379, "redis-info"), (6443, "http-title,http-server-header"), (8000, "http-title,http-methods"), (8080, "http-title,http-headers,http-methods,http-enum"), (8443, "http-title,ssl-cert,ssl-enum-ciphers"), (9000, "http-title"), (9200, "http-title,http-methods"), (11211, "memcached-info") ]);
 
-fn scripts_for_ports(open_ports: &[u16]) -> String { let mut set = HashSet::new(); set.insert("default".to_string()); for p in open_ports { for (port, scripts) in PORT_SCRIPT_MAP.iter() { if p == port { for s in scripts.split(',') { set.insert(s.trim().to_string()); } } } } let mut v: Vec<_> = set.into_iter().collect(); v.sort(); v.join(",") }
+fn scripts_for_ports(open_ports: &[u16], probes: &[crate::probes::ProbeResult]) -> String {
+    let mut set = HashSet::new();
+    set.insert("default".to_string());
+
+    for p in open_ports {
+        for (port, scripts) in PORT_SCRIPT_MAP.iter() {
+            if p == port {
+                for s in scripts.split(',') { set.insert(s.trim().to_string()); }
+            }
+        }
+    }
+
+    for probe in probes {
+        match probe.protocol.as_str() {
+            "http" => {
+                set.insert("http-title".into());
+                set.insert("http-headers".into());
+                set.insert("http-enum".into());
+            }
+            "ssh" => { set.insert("ssh2-enum-algos".into()); }
+            "redis" => { set.insert("redis-info".into()); }
+            "mysql" => { set.insert("mysql-info".into()); set.insert("mysql-enum".into()); }
+            "mail" => { set.insert("smtp-commands".into()); }
+            _ => {}
+        }
+    }
+
+    let mut v: Vec<_> = set.into_iter().collect();
+    v.sort();
+    v.join(",")
+}
 
 fn normalize_nmap_args(input: &str) -> String { let mut out: Vec<String> = Vec::new(); for tok in input.split_whitespace() { if tok.starts_with('-') { out.push(tok.to_string()); continue; } let up = tok.to_ascii_uppercase(); match up.as_str() { "SCV" => { out.push("-sC".into()); out.push("-sV".into()); continue; }, "SC" => { out.push("-sC".into()); continue; }, "SV" => { out.push("-sV".into()); continue; }, "SS" => { out.push("-sS".into()); continue; }, "SU" => { out.push("-sU".into()); continue; }, "PN" => { out.push("-Pn".into()); continue; }, "A" => { out.push("-A".into()); continue; }, _ => {} } if up.len() == 2 && up.starts_with('T') && matches!(up.as_bytes()[1], b'0'..=b'5') { out.push(format!("-{}", up)); continue; } if let Some((k, v)) = tok.split_once('=') { let known = ["script","min-rate","max-retries","host-timeout","scan-delay","max-scan-delay","data-length","version-intensity","script-timeout"]; if known.iter().any(|kk| kk.eq_ignore_ascii_case(k)) { out.push(format!("--{}={}", k, v)); continue; } } if tok.len() <= 3 && tok.chars().all(|c| c.is_ascii_alphanumeric()) { out.push(format!("-{}", tok)); } else { out.push(tok.to_string()); } } out.join(" ") }
 

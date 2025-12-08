@@ -24,15 +24,10 @@ RustMapV3 combines the lightning-fast performance of Rust-based port scanning wi
 - **Top Ports**: Predefined lists of most common ports (top 100, 1000, 5000)
 - **Full Range**: Complete 1-65535 port scanning capability
 
-### RustScan Integration
-- **Optional Integration**: Use RustScan for ultra-fast port discovery when available
-- **Graceful Fallback**: Automatically falls back to internal scanner if RustScan unavailable
-- **Pass-through Arguments**: Custom RustScan arguments support
-
 ### Nmap Orchestration
 - **Deep Scanning**: Automatic Nmap execution on discovered open ports
 - **Service Detection**: Version detection (`-sV`) and default scripts (`-sC`)
-- **Custom Scripts**: NSE script specification (default, vuln, auth, custom)
+- **Smart Scripts**: Automatic NSE script selection based on open-port probes
 - **Multiple Outputs**: Normal, XML, and grepable output formats
 - **Organized Results**: Timestamped output files in structured directories
 
@@ -53,7 +48,6 @@ curl -sSL https://raw.githubusercontent.com/Wael-Rd/RustMapV3/main/install.sh | 
 ### Prerequisites
 - **Rust** (Edition 2021+): Install from [rustup.rs](https://rustup.rs/)
 - **Nmap** (Optional but recommended): Install from [nmap.org](https://nmap.org/)
-- **RustScan** (Optional): Install from [rustscan.github.io](https://rustscan.github.io/RustScan/)
 
 
 ### Manual Installation
@@ -65,7 +59,7 @@ RustMapV3 --help
 ### Verify Installation
 ```bash
 # Test with localhost
-RustMapV3 127.0.0.1 --preset fast --top 10 --no-nmap
+RustMapV3 127.0.0.1 --profile fast -p top100 --no-nmap
 ```
 
 ## 🛠️ Usage
@@ -74,17 +68,17 @@ RustMapV3 127.0.0.1 --preset fast --top 10 --no-nmap
 
 #### Single Target Scan
 ```bash
-# Quick scan with fast preset
-RustMapV3 192.168.1.1 --preset fast
+# Quick scan with fast profile
+RustMapV3 192.168.1.1 --profile fast
 
-# Full port range with thorough preset  
-RustMapV3 192.168.1.1 --preset thorough
+# Full port range with stealth profile  
+RustMapV3 192.168.1.1 --profile stealth
 
 # Scan specific ports
 RustMapV3 192.168.1.1 --ports "22,80,443,3306,8080-8090"
 
 # Scan hostname with top 100 ports
-RustMapV3 example.com --top 100
+RustMapV3 example.com -p top100
 ```
 
 #### Multiple Targets
@@ -92,36 +86,24 @@ RustMapV3 example.com --top 100
 # Multiple IPs
 RustMapV3 "192.168.1.1,192.168.1.10,example.com"
 
-# CIDR notation with full preset
-RustMapV3 192.168.1.0/24 --preset full
+# CIDR notation with balanced profile
+RustMapV3 192.168.1.0/24 --profile balanced
 
 # Mixed targets with custom options
-RustMapV3 "192.168.1.1,example.com,10.0.0.0/28" --ports "1-1024" --confirm-open
+RustMapV3 "192.168.1.1,example.com,10.0.0.0/28" --ports "1-1024"
 ```
 
 #### Performance Tuning
 ```bash
-# High concurrency scan with custom settings
-RustMapV3 192.168.1.0/24 --concurrency 8192 --targets-concurrency 64 --timeout 200
+# Pick a faster profile and smaller port set
+RustMapV3 192.168.1.0/24 --profile fast -p top100
 
-# Rate limited scan for stealth
-RustMapV3 192.168.1.0/24 --rate 1000 --batch-size 512
-
-# Use RustScan for discovery (fallback to internal)
-RustMapV3 192.168.1.1 --use-rustscan --rustscan-args "--ulimit 10000"
+# Stream live events for automation pipelines
+RustMapV3 192.168.1.0/24 --profile balanced --stream-events
 ```
 
 #### Nmap Integration
 ```bash
-# Smart Nmap with targeted scripts
-RustMapV3 192.168.1.1 --nmap-mode smart
-
-# Custom Nmap arguments with normalization
-RustMapV3 192.168.1.1 --nmap-args "sCV T4 script=vuln"
-
-# Specific NSE scripts  
-RustMapV3 192.168.1.1 --nse "vuln,auth,default"
-
 # Skip Nmap deep scanning
 RustMapV3 192.168.1.1 --no-nmap
 
@@ -129,16 +111,16 @@ RustMapV3 192.168.1.1 --no-nmap
 RustMapV3 192.168.1.1 --output /tmp/scan_results
 ```
 
-#### Presets and Output Formats
+#### Profiles and Output Formats
 ```bash
-# Fast preset: top 1000 ports, high concurrency, no confirm
-RustMapV3 192.168.1.1 --preset fast
+# Fast profile: top 1000 ports, high concurrency, no confirm
+RustMapV3 192.168.1.1 --profile fast
 
-# Full preset (default): all ports, balanced settings
-RustMapV3 192.168.1.1 --preset full  
+# Balanced profile (default): top 1000 ports, balanced settings
+RustMapV3 192.168.1.1 --profile balanced  
 
-# Thorough preset: all ports, confirm pass, lower concurrency
-RustMapV3 192.168.1.1 --preset thorough
+# Stealth profile: full ports, confirm pass, conservative pacing
+RustMapV3 192.168.1.1 --profile stealth
 
 # JSON output
 RustMapV3 192.168.1.1 --format json
@@ -158,11 +140,7 @@ RustMapV3 192.168.1.1 --verbose
 #### Large Network Scan
 ```bash
 RustMapV3 "10.0.0.0/20" \
-  --preset full \
-  --targets-concurrency 64 \
-  --rate 15000 \
-  --confirm-open \
-  --nse "default,vuln" \
+  --profile balanced \
   --output ./enterprise_scan \
   --format json
 ```
@@ -171,11 +149,8 @@ RustMapV3 "10.0.0.0/20" \
 ```bash
 RustMapV3 target.com \
   --ports "22,80,443" \
-  --concurrency 10 \
-  --rate 5 \
-  --timeout 2000 \
-  --nmap-args "T1 A" \
-  --nmap-mode plain
+  --profile stealth \
+  --format json
 ```
 
 ## 📊 Output
@@ -236,30 +211,22 @@ Structured JSON output for automation and integration:
 ### Command Line Options
 ```
 USAGE:
-    rustmapv3 [OPTIONS] <TARGETS>
+  rustmapv3 [OPTIONS] <TARGETS>
 
 ARGUMENTS:
-    <TARGETS>    Target(s): IP (192.168.1.1), hostname (example.com), 
-                 list (192.168.1.1,example.com), or CIDR (192.168.1.0/24)
+  <TARGETS>    IP, hostname, list (a,b), or CIDR (192.168.1.0/24)
 
 OPTIONS:
-    -p, --ports <PORTS>           Port ranges/lists: 1-1024,3306,8080-8090 [default: 1-65535]
-    -t, --top <N>                 Scan top N common ports (100, 1000, 5000)
-    -c, --concurrency <N>         Concurrent connection limit [default: 4096]
-        --timeout <MS>            Connection timeout in milliseconds [default: 300]
-    -r, --rate <N>                Max connection attempts per second
-        --batch-size <N>          Internal batch size for processing [default: 1024]
-        --use-rustscan            Use RustScan binary for port discovery
-        --rustscan-args <ARGS>    Additional arguments for RustScan
-        --nmap-args <ARGS>        Additional arguments for Nmap
-        --nse <SCRIPTS>           NSE scripts: default,vuln,auth or specific script names
-    -o, --output <DIR>            Output directory for scan results [default: scans]
-        --no-nmap                 Skip Nmap deep scanning, only perform port discovery
-    -v, --verbose                 Enable verbose output
-    -q, --quiet                   Quiet mode
-        --format <FORMAT>         Output format: json, yaml, table [default: table]
-    -h, --help                    Print help
-    -V, --version                 Print version
+  --profile <fast|balanced|stealth>   Speed/stealth profile [default: balanced]
+  -p, --ports <PORTS>                 "top1000" (default), "top100", or ranges like 1-65535
+  --no-nmap                           Skip Nmap deep scanning
+  -o, --output <DIR>                  Output directory for Nmap results [default: scans]
+  --format <json|yaml|table>          Output format [default: table]
+  --stream-events                     Stream JSON events as results arrive
+  -v, --verbose                       Verbose output
+  -q, --quiet                         Quiet mode
+  -h, --help                          Print help
+  -V, --version                       Print version
 ```
 
 ### Environment Variables
@@ -294,7 +261,7 @@ src/
 ├── lib.rs          # Library exports and common ports
 ├── cli.rs          # Command line argument parsing
 ├── scanner.rs      # Internal TCP port scanner
-├── rustscan.rs     # RustScan integration
+├── rustscan.rs     # Legacy RustScan shim (internal scanner used)
 ├── nmap.rs         # Nmap orchestration
 ├── targets.rs      # Target parsing and expansion
 ├── ports.rs        # Port range parsing

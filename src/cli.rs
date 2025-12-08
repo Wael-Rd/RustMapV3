@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     name = "RustMapV3",
-    version = "0.2.0",
+    version = "0.3.0",
     about = "Ultra-fast TCP port discovery with smart Nmap orchestration",
     long_about = "RustMapV3 discovers open TCP ports at high speed and orchestrates Nmap with targeted scripts for maximum signal per second."
 )]
@@ -15,73 +15,29 @@ pub struct Cli {
     #[arg(value_name = "TARGETS")]
     pub targets: String,
 
-    /// Preset for speed vs. depth. Overrides individual flags unless explicitly set.
-    #[arg(long = "preset", value_enum, default_value = "full")]
-    pub preset: Preset,
+    /// Profile for speed vs. stealth
+    #[arg(long = "profile", value_enum, default_value = "balanced")]
+    pub profile: Profile,
 
-    /// Ports to scan [default: 1-65535]
-    #[arg(short = 'p', long = "ports", default_value = "1-65535")]
+    /// Ports to scan ("top1000", "top100", or ranges like 1-65535)
+    #[arg(short = 'p', long = "ports", default_value = "top1000")]
     pub ports: String,
-
-    /// Scan top N common ports (overrides --ports)
-    #[arg(short = 't', long = "top", value_name = "N", conflicts_with = "ports")]
-    pub top_ports: Option<usize>,
-
-    /// Per-target concurrency (connections in flight per host)
-    #[arg(long = "concurrency", value_name = "N")]
-    pub concurrency: Option<usize>,
-
-    /// Concurrent targets scanned in parallel
-    #[arg(long = "targets-concurrency", value_name = "N")]
-    pub targets_concurrency: Option<usize>,
-
-    /// Timeout in milliseconds per connection attempt
-    #[arg(long = "timeout", value_name = "MS")]
-    pub timeout: Option<u64>,
-
-    /// Global connection attempts per second
-    #[arg(short = 'r', long = "rate", value_name = "N")]
-    pub rate_limit: Option<u64>,
-
-    /// Internal batch size (ports per chunk)
-    #[arg(long = "batch-size", value_name = "N")]
-    pub batch_size: Option<usize>,
-
-    /// Confirm open ports with a quick second pass (reduces false positives)
-    #[arg(long = "confirm-open")]
-    pub confirm_open: bool,
-
-    /// Use RustScan for discovery (fallback to internal scanner)
-    #[arg(long = "use-rustscan")]
-    pub use_rustscan: bool,
-
-    /// Additional arguments for RustScan
-    #[arg(long = "rustscan-args", requires = "use_rustscan")]
-    pub rustscan_args: Option<String>,
-
-    /// Additional arguments for Nmap (shorthand normalized, e.g., sCV -> -sC -sV)
-    #[arg(long = "nmap-args")]
-    pub nmap_args: Option<String>,
-
-    /// NSE scripts: default,vuln,auth or specific scripts
-    #[arg(long = "nse")]
-    pub nse_scripts: Option<String>,
-
-    /// Nmap mode: smart targets scripts for discovered ports vs plain default scripts
-    #[arg(long = "nmap-mode", value_enum, default_value = "smart")]
-    pub nmap_mode: NmapMode,
-
-    /// Output directory for Nmap results
-    #[arg(short = 'o', long = "output", default_value = "scans")]
-    pub output_dir: PathBuf,
 
     /// Skip Nmap deep scanning
     #[arg(long = "no-nmap")]
     pub no_nmap: bool,
 
+    /// Output directory for Nmap results
+    #[arg(short = 'o', long = "output", default_value = "scans")]
+    pub output_dir: PathBuf,
+
     /// Output format: json, yaml, table
     #[arg(long = "format", value_enum, default_value = "table")]
     pub output_format: OutputFormat,
+
+    /// Stream JSON event objects to stdout as the scan progresses
+    #[arg(long = "stream-events")]
+    pub stream_events: bool,
 
     /// Verbose output
     #[arg(short = 'v', long = "verbose")]
@@ -96,10 +52,7 @@ pub struct Cli {
 pub enum OutputFormat { Json, Yaml, Table }
 
 #[derive(Clone, Debug, ValueEnum)]
-pub enum Preset { Fast, Full, Thorough }
-
-#[derive(Clone, Debug, ValueEnum)]
-pub enum NmapMode { Smart, Plain }
+pub enum Profile { Fast, Balanced, Stealth }
 
 pub struct Effective {
     pub ports: String,
@@ -109,45 +62,39 @@ pub struct Effective {
     pub rate_limit: Option<u64>,
     pub batch_size: usize,
     pub confirm_open: bool,
+    pub enable_probes: bool,
+    pub stream_events: bool,
 }
 
 impl Cli {
     pub fn parse_args() -> Self { Self::parse() }
 
     pub fn validate(&self) -> crate::Result<()> {
-        if let Some(top) = self.top_ports {
-            if top == 0 || top > 65535 {
-                return Err(crate::Error::General("Top ports must be between 1 and 65535".into()));
-            }
+        if self.ports.trim().is_empty() {
+            return Err(crate::Error::General("Port selection cannot be empty".into()));
         }
         Ok(())
     }
 
     pub fn effective(&self) -> Effective {
-        let (mut ports, mut concurrency, mut targets_concurrency, mut timeout_ms, mut rate, mut batch, confirm) = match self.preset {
-            Preset::Fast => (
-                self.top_ports.map(|n| n.to_string()).unwrap_or_else(|| "top1000".to_string()),
-                8192, 32, 200, Some(20000), 1500, self.confirm_open,
-            ),
-            Preset::Full => (
-                "1-65535".to_string(),
-                8192, 32, 250, Some(15000), 2000, self.confirm_open,
-            ),
-            Preset::Thorough => (
-                "1-65535".to_string(),
-                4096, 16, 600, Some(6000), 1500, true,
-            ),
+        let ports = self.ports.clone();
+
+        let (concurrency, targets_concurrency, timeout_ms, rate, batch, confirm_open) = match self.profile {
+            Profile::Fast => (12288, 64, 180, Some(25000), 2200, false),
+            Profile::Balanced => (8192, 32, 250, Some(15000), 2000, true),
+            Profile::Stealth => (512, 8, 1200, Some(400), 800, true),
         };
 
-        if let Some(user_ports) = self.top_ports.map(|n| format!("top{}", n)).or_else(|| if !self.ports.trim().is_empty() { Some(self.ports.clone()) } else { None }) {
-            ports = user_ports;
+        Effective {
+            ports,
+            concurrency,
+            targets_concurrency,
+            timeout_ms,
+            rate_limit: rate,
+            batch_size: batch,
+            confirm_open,
+            enable_probes: true,
+            stream_events: self.stream_events,
         }
-        if let Some(c) = self.concurrency { concurrency = c; }
-        if let Some(tc) = self.targets_concurrency { targets_concurrency = tc; }
-        if let Some(t) = self.timeout { timeout_ms = t; }
-        if let Some(r) = self.rate_limit { rate = Some(r); }
-        if let Some(b) = self.batch_size { batch = b; }
-
-        Effective { ports, concurrency, targets_concurrency, timeout_ms, rate_limit: rate, batch_size: batch, confirm_open: confirm }
     }
 }

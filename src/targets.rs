@@ -2,7 +2,7 @@
 
 use crate::{Error, Result};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
 use std::str::FromStr;
 use trust_dns_resolver::TokioAsyncResolver;
 

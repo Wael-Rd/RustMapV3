@@ -1,4 +1,5 @@
 use crate::targets::Target;
+use crate::probes::{probe_port, ProbeResult};
 use crate::Result;
 use futures::stream::{self, StreamExt};
 use std::sync::Arc;
@@ -16,12 +17,33 @@ pub struct ScanConfig {
     pub rate_limit: Option<u64>,
     pub batch_size: usize,
     pub confirm_open: bool,
+    pub enable_probes: bool,
+    pub stream_events: bool,
 }
 
-impl Default for ScanConfig { fn default() -> Self { Self { concurrency: 8192, targets_concurrency: 32, timeout: Duration::from_millis(250), rate_limit: Some(15000), batch_size: 2000, confirm_open: true } } }
+impl Default for ScanConfig {
+    fn default() -> Self {
+        Self {
+            concurrency: 8192,
+            targets_concurrency: 32,
+            timeout: Duration::from_millis(250),
+            rate_limit: Some(15000),
+            batch_size: 2000,
+            confirm_open: true,
+            enable_probes: true,
+            stream_events: false,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
-pub struct ScanResults { pub target: Target, pub open_ports: Vec<u16>, pub total_ports_scanned: usize, pub scan_duration: Duration }
+pub struct ScanResults {
+    pub target: Target,
+    pub open_ports: Vec<u16>,
+    pub total_ports_scanned: usize,
+    pub scan_duration: Duration,
+    pub probes: Vec<ProbeResult>,
+}
 impl ScanResults { pub fn has_open_ports(&self) -> bool { !self.open_ports.is_empty() } pub fn open_port_count(&self) -> usize { self.open_ports.len() } }
 
 pub struct Scanner { pub(crate) config: ScanConfig }
@@ -32,18 +54,128 @@ impl Scanner {
         let futs = targets.iter().cloned().map(|t| self.scan_target_owned(t, ports.to_vec()));
         let results: Vec<ScanResults> = stream::iter(futs).buffer_unordered(self.config.targets_concurrency).collect().await; Ok(results)
     }
-    async fn scan_target_owned(&self, target: Target, ports: Vec<u16>) -> ScanResults { match self.scan_target(&target, &ports).await { Ok(res) => res, Err(_) => ScanResults { target, open_ports: vec![], total_ports_scanned: ports.len(), scan_duration: Duration::from_secs(0) } } }
+    async fn scan_target_owned(&self, target: Target, ports: Vec<u16>) -> ScanResults {
+        match self.scan_target(&target, &ports).await {
+            Ok(res) => res,
+            Err(_) => ScanResults {
+                target,
+                open_ports: vec![],
+                total_ports_scanned: ports.len(),
+                scan_duration: Duration::from_secs(0),
+                probes: vec![],
+            },
+        }
+    }
     pub async fn scan_target(&self, target: &Target, ports: &[u16]) -> Result<ScanResults> {
         let start = Instant::now(); info!("Scanning {} ports on {}", ports.len(), target.display_name());
         let rate_limiter = self.config.rate_limit.map(|r| Arc::new(tokio::sync::Mutex::new(RateLimiter::new(r))));
         let mut open = Vec::new();
         let chunks = crate::ports::chunk_ports(ports, self.config.batch_size);
         for chunk in chunks {
-            let tasks = chunk.into_iter().map(|port| { let target = target.clone(); let rate_limiter = rate_limiter.clone(); let to = self.config.timeout; async move { if let Some(l) = &rate_limiter { let mut l = l.lock().await; l.wait().await; } if scan_port_once(&target, port, to).await { Some(port) } else { None } } });
-            let mut found: Vec<u16> = stream::iter(tasks).buffer_unordered(self.config.concurrency).filter_map(|x| async move { x }).collect().await; open.append(&mut found);
+            let tasks = chunk.into_iter().map(|port| {
+                let target = target.clone();
+                let rate_limiter = rate_limiter.clone();
+                let to = self.config.timeout;
+                async move {
+                    if let Some(l) = &rate_limiter {
+                        let mut l = l.lock().await;
+                        l.wait().await;
+                    }
+                    if scan_port_once(&target, port, to).await { Some(port) } else { None }
+                }
+            });
+
+            let mut found: Vec<u16> = stream::iter(tasks)
+                .buffer_unordered(self.config.concurrency)
+                .filter_map(|x| async move { x })
+                .collect()
+                .await;
+
+            if self.config.stream_events {
+                for p in &found {
+                    println!(
+                        "{}",
+                        serde_json::json!({
+                            "event": "port_open",
+                            "target": target.display_name(),
+                            "port": p
+                        })
+                    );
+                }
+            }
+
+            open.append(&mut found);
         }
-        if self.config.confirm_open && !open.is_empty() { let confirm_to = (self.config.timeout.as_millis() as u64 * 2).clamp(200, 1500); let confirm_to = Duration::from_millis(confirm_to); let tasks = open.into_iter().map(|p| confirm_open_port(target, p, confirm_to)); let mut confirmed: Vec<u16> = stream::iter(tasks).buffer_unordered(self.config.concurrency.min(1024)).filter_map(|x| async move { if x.1 { Some(x.0) } else { None } }).collect().await; confirmed.sort_unstable(); let dur = start.elapsed(); info!("Completed scan of {} — {} open ports confirmed in {:.2}s", target.display_name(), confirmed.len(), dur.as_secs_f64()); return Ok(ScanResults { target: target.clone(), open_ports: confirmed, total_ports_scanned: ports.len(), scan_duration: dur }); }
-        open.sort_unstable(); let dur = start.elapsed(); info!("Completed scan of {} — {} open ports found in {:.2}s", target.display_name(), open.len(), dur.as_secs_f64()); Ok(ScanResults { target: target.clone(), open_ports: open, total_ports_scanned: ports.len(), scan_duration: dur })
+        let open_ports = if self.config.confirm_open && !open.is_empty() {
+            let confirm_to = (self.config.timeout.as_millis() as u64 * 2).clamp(200, 1500);
+            let confirm_to = Duration::from_millis(confirm_to);
+            let tasks = open.into_iter().map(|p| confirm_open_port(target, p, confirm_to));
+            let mut confirmed: Vec<u16> = stream::iter(tasks)
+                .buffer_unordered(self.config.concurrency.min(1024))
+                .filter_map(|x| async move { if x.1 { Some(x.0) } else { None } })
+                .collect()
+                .await;
+            confirmed.sort_unstable();
+            confirmed
+        } else {
+            let mut ports_vec = open;
+            ports_vec.sort_unstable();
+            ports_vec
+        };
+
+        let probes = if self.config.enable_probes && !open_ports.is_empty() {
+            self.run_probes(target, &open_ports).await
+        } else {
+            Vec::new()
+        };
+
+        let dur = start.elapsed();
+        info!(
+            "Completed scan of {} — {} open ports in {:.2}s ({} probes)",
+            target.display_name(),
+            open_ports.len(),
+            dur.as_secs_f64(),
+            probes.len()
+        );
+
+        Ok(ScanResults {
+            target: target.clone(),
+            open_ports,
+            total_ports_scanned: ports.len(),
+            scan_duration: dur,
+            probes,
+        })
+    }
+
+    async fn run_probes(&self, target: &Target, open_ports: &[u16]) -> Vec<ProbeResult> {
+        let tasks = open_ports.iter().copied().map(|p| {
+            let target = target.clone();
+            let timeout = self.config.timeout;
+            async move { probe_port(&target, p, timeout).await }
+        });
+
+        let mut results: Vec<ProbeResult> = stream::iter(tasks)
+            .buffer_unordered(self.config.concurrency.min(512))
+            .filter_map(|r| async move { r })
+            .collect()
+            .await;
+
+        results.sort_by_key(|r| r.port);
+        if self.config.stream_events {
+            for r in &results {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "event": "probe_result",
+                        "target": target.display_name(),
+                        "port": r.port,
+                        "protocol": r.protocol,
+                        "summary": r.summary,
+                    })
+                );
+            }
+        }
+        results
     }
 }
 

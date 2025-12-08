@@ -1,7 +1,6 @@
 use anyhow::Result;
-use rustmapv3::cli::{Cli, NmapMode, OutputFormat};
+use rustmapv3::cli::{Cli, OutputFormat};
 use rustmapv3::nmap::{NmapConfig, NmapOrchestrator};
-use rustmapv3::rustscan::FallbackScanner;
 use rustmapv3::scanner::{ScanConfig, Scanner};
 use rustmapv3::{ports, targets};
 use std::time::Duration;
@@ -53,12 +52,9 @@ async fn main() -> Result<()> {
     info!("Found {} valid targets", targets.len());
 
     // Parse ports
-    let ports = if let Some(top_count) = cli.top_ports {
-        info!("Using top {} common ports", top_count);
-        ports::get_top_ports(top_count)
-    } else if effective.ports.starts_with("top") {
+    let ports = if effective.ports.starts_with("top") {
         let count: usize = effective.ports[3..].parse().unwrap_or(1000);
-        info!("Using top {} common ports from preset", count);
+        info!("Using top {} common ports", count);
         ports::get_top_ports(count)
     } else {
         info!("Parsing port specification: {}", effective.ports);
@@ -81,18 +77,13 @@ async fn main() -> Result<()> {
         rate_limit: effective.rate_limit,
         batch_size: effective.batch_size,
         confirm_open: effective.confirm_open,
+        enable_probes: effective.enable_probes,
+        stream_events: effective.stream_events,
     };
 
     // Perform port scanning
-    let scan_results = if cli.use_rustscan {
-        info!("Using RustScan integration with fallback to internal scanner");
-        let fallback_scanner = FallbackScanner::new(cli.rustscan_args.clone(), scan_config);
-        fallback_scanner.scan_targets(&targets, &ports).await
-    } else {
-        info!("Using internal high-performance scanner");
-        let scanner = Scanner::new(scan_config);
-        scanner.scan_targets(&targets, &ports).await
-    };
+    let scanner = Scanner::new(scan_config);
+    let scan_results = scanner.scan_targets(&targets, &ports).await;
 
     let scan_results = match scan_results {
         Ok(results) => results,
@@ -110,10 +101,10 @@ async fn main() -> Result<()> {
         info!("Starting Nmap deep scanning phase");
         
         let nmap_config = NmapConfig {
-            nmap_args: cli.nmap_args.clone(),
-            nse_scripts: cli.nse_scripts.clone(),
+            nmap_args: None,
+            nse_scripts: None,
             output_dir: cli.output_dir.clone(),
-            smart_mode: matches!(cli.nmap_mode, NmapMode::Smart),
+            smart_mode: true,
         };
 
         let nmap_orchestrator = NmapOrchestrator::new(nmap_config);
@@ -147,7 +138,7 @@ fn display_banner() {
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝   ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝     
                                                               by Mrx0rd
 Ultra-fast TCP port discovery engine with Nmap orchestration
-Version 0.2.0 | https://github.com/Wael-Rd/RustMapV3
+Version 0.3.0 | https://github.com/Wael-Rd/RustMapV3
 "#);
 }
 
@@ -181,6 +172,12 @@ fn display_scan_results_table(results: &[rustmapv3::scanner::ScanResults]) {
             
             println!("   Open Ports: {}", ports::format_ports_summary(&result.open_ports));
             println!("   🟢 {} open ports found", result.open_port_count());
+            if !result.probes.is_empty() {
+                println!("   🔎 Fingerprints:");
+                for p in &result.probes {
+                    println!("     - {}: {}", p.port, p.summary);
+                }
+            }
         } else {
             println!("   🔴 No open ports found");
         }
@@ -207,7 +204,8 @@ fn display_scan_results_json(results: &[rustmapv3::scanner::ScanResults]) {
                 "total_ports_scanned": result.total_ports_scanned,
                 "open_ports": result.open_ports,
                 "open_port_count": result.open_port_count(),
-                "has_open_ports": result.has_open_ports()
+                "has_open_ports": result.has_open_ports(),
+                "probes": result.probes.iter().map(|p| serde_json::json!({"port": p.port, "protocol": p.protocol, "summary": p.summary})).collect::<Vec<_>>()
             })
         })
         .collect();
@@ -239,7 +237,8 @@ fn display_scan_results_yaml(results: &[rustmapv3::scanner::ScanResults]) {
                 "total_ports_scanned": result.total_ports_scanned,
                 "open_ports": result.open_ports,
                 "open_port_count": result.open_port_count(),
-                "has_open_ports": result.has_open_ports()
+                "has_open_ports": result.has_open_ports(),
+                "probes": result.probes.iter().map(|p| serde_json::json!({"port": p.port, "protocol": p.protocol, "summary": p.summary})).collect::<Vec<_>>()
             })
         })
         .collect();

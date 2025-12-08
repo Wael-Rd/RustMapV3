@@ -9,6 +9,7 @@ pub mod nmap;
 pub mod rustscan;
 pub mod targets;
 pub mod ports;
+pub mod probes;
 pub mod error;
 
 pub use error::{Error, Result};
